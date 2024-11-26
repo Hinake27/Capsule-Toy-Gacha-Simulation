@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .container {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .box {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border-left: 4px solid #2196f3;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            margin: 10px 0;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 120px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .card {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            transition: all 0.3s;
+        }
+        .highlight {
+            background: linear-gradient(145deg, #ffd700, #ffa500);
+            color: #000;
+            font-weight: bold;
+        }
+        .wishlist {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin: 10px 0;
+        }
+        .wish-item {
+            background: #e3f2fd;
+            padding: 5px 10px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .remove-wish {
+            color: red;
+            cursor: pointer;
+        }
+        .total-cost {
+            background: #ff4081;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .history {
+            max-height: 150px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .history-item {
+            background: white;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .got-wish {
+            color: #ffa000;
+            font-weight: bold;
+            margin-top: 5px;
+            padding-left: 10px;
+            border-left: 3px solid #ffd700;
+        }
+        .prob-panel {
+            position: sticky;
+            top: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #ff9800;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .prob-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .warn {
+            background: #ffebee;
+            color: #d32f2f;
+            padding: 8px;
+            border-radius: 4px;
+            margin-top: 10px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="prob-panel">
+            <h3>📊 機率總覽</h3>
+            <div id="probStats"></div>
+            <div id="warn" class="warn"></div>
+        </div>
+
+        <div class="box">
+            <h3>📋 使用說明</h3>
+            <ol>
+                <li>貼上官方機率表（自動計算總機率）</li>
+                <li>設定扭蛋價格和次數</li>
+                <li>加入期望道具（可選）</li>
+                <li>點擊計算查看結果</li>
+            </ol>
+        </div>
+        
+        <textarea id="input" placeholder="請貼上機率表..." oninput="analyzeProbability()"></textarea>
+        
+        <div class="box">
+            <div>
+                <label>單抽價格：</label>
+                <input type="number" id="price" value="30" min="1">
+            </div>
+            <div style="margin-top:10px">
+                <label>抽卡次數：</label>
+                <input type="number" id="times" value="10" min="1">
+            </div>
+            <div id="cost" style="margin-top:10px"></div>
+        </div>
+
+        <div class="box">
+            <h3>期望道具</h3>
+            <div>
+                <input type="text" id="wishInput" placeholder="輸入道具名稱..." style="width:200px">
+                <button onclick="addWishItem()" style="background:#2196f3">新增</button>
+            </div>
+            <div id="wishlist" class="wishlist"></div>
+        </div>
+
+        <div class="box">
+            <h3>💰 花費統計</h3>
+            <div class="total-cost" id="totalCost">
+                累積花費：NT$ 0
+                <div style="font-size: 0.8em" id="wishSummary"></div>
+            </div>
+            <div class="history" id="history"></div>
+        </div>
+
+        <button onclick="calculate()">計算</button>
+        <button onclick="clearAll()" style="background:#666">清除</button>
+
+        <div id="result"></div>
+    </div>
+
+<script>
+    // 全局變量
+    let items = [];
+    let wishItems = new Set();
+    let expenses = [];
+    let totalSpent = 0;
+    let currentProbStats = null;
+
+    // 機率分析函數
+    function analyzeProbability() {
+        const input = document.getElementById('input').value;
+        const stats = {
+            total: 0,
+            grades: new Map(),
+            items: 0,
+            itemList: []
+        };
+
+        try {
+            // 解析機率表
+            const sabcRegex = /([SABC])\s*等級([^%]+?)(\d+\.\d+)%/g;
+            let match;
+            let hasMatch = false;
+
+            // 嘗試 SABC 格式
+            while ((match = sabcRegex.exec(input)) !== null) {
+                hasMatch = true;
+                const [, grade, name, prob] = match;
+                const probability = parseFloat(prob);
+                
+                stats.total += probability;
+                stats.items++;
+                stats.grades.set(grade, (stats.grades.get(grade) || 0) + probability);
+                stats.itemList.push({ grade, name: name.trim(), probability });
+            }
+
+            // 如果沒有 SABC 格式，嘗試一般格式
+            if (!hasMatch) {
+                const regex = /(.+?)(\d+\.\d+)%/g;
+                while ((match = regex.exec(input)) !== null) {
+                    const [, name, prob] = match;
+                    const probability = parseFloat(prob);
+                    
+                    stats.total += probability;
+                    stats.items++;
+                    stats.grades.set('一般', (stats.grades.get('一般') || 0) + probability);
+                    stats.itemList.push({ grade: '一般', name: name.trim(), probability });
+                }
+            }
+
+            currentProbStats = stats;
+            updateProbabilityDisplay(stats);
+            items = stats.itemList;
+        } catch (error) {
+            console.error('分析錯誤:', error);
+        }
+    }
+
+    function updateProbabilityDisplay(stats) {
+        if (stats.items === 0) {
+            document.getElementById('probStats').innerHTML = '<div>等待輸入機率表...</div>';
+            document.getElementById('warn').style.display = 'none';
+            return;
+        }
+
+        let html = `
+            <div style="font-size:1.1em;margin-bottom:10px">
+                總機率：<strong>${stats.total.toFixed(4)}%</strong>
+                (共 ${stats.items} 個項目)
+            </div>
+            <div class="prob-stats">
+        `;
+
+        stats.grades.forEach((prob, grade) => {
+            html += `
+                <div class="card">
+                    ${grade}等級：${prob.toFixed(4)}%
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        document.getElementById('probStats').innerHTML = html;
+
+        // 檢查總機率
+        const warn = document.getElementById('warn');
+        if (Math.abs(stats.total - 100) > 0.01) {
+            warn.innerHTML = `⚠️ 注意：總機率不等於100% (差異：${(100 - stats.total).toFixed(4)}%)`;
+            warn.style.display = 'block';
+        } else {
+            warn.style.display = 'none';
+        }
+    }
+
+    // 期望道具相關
+    function addWishItem() {
+        const input = document.getElementById('wishInput');
+        const item = input.value.trim();
+        if (item) {
+            wishItems.add(item);
+            input.value = '';
+            updateWishlist();
+            saveData();
+        }
+    }
+
+    function removeWishItem(item) {
+        wishItems.delete(item);
+        updateWishlist();
+        saveData();
+    }
+
+    function updateWishlist() {
+        document.getElementById('wishlist').innerHTML = Array.from(wishItems)
+            .map(item => `
+                <div class="wish-item">
+                    ${item}
+                    <span class="remove-wish" onclick="removeWishItem('${item}')">&times;</span>
+                </div>
+            `).join('');
+    }
+
+    // 花費記錄相關
+    function addExpense(amount, pulls, results) {
+        const gotWishes = Array.from(results.entries())
+            .filter(([name]) => wishItems.has(name))
+            .map(([name, count]) => `${name} (${count}次)`);
+
+        expenses.push({
+            amount,
+            pulls,
+            date: new Date().toLocaleString(),
+            gotWishes
+        });
+
+        totalSpent += amount;
+        updateExpenseDisplay();
+        saveData();
+    }
+
+    function updateExpenseDisplay() {
+        const totalWishHits = expenses.reduce((sum, exp) => 
+            sum + exp.gotWishes.length, 0);
+
+        document.getElementById('totalCost').innerHTML = `
+            累積花費：NT$ ${totalSpent.toLocaleString()}
+            <div style="font-size:0.8em">
+                期望道具總計獲得：${totalWishHits} 個
+            </div>
+        `;
+        
+        document.getElementById('history').innerHTML = expenses.map((exp, index) => `
+            <div class="history-item">
+                <div style="display:flex;justify-content:space-between">
+                    <div>
+                        <strong>NT$ ${exp.amount.toLocaleString()}</strong> 
+                        (${exp.pulls}抽)
+                        <div style="color:#666;font-size:0.9em">${exp.date}</div>
+                    </div>
+                    <button class="delete-btn" onclick="removeExpense(${index})">刪除</button>
+                </div>
+                ${exp.gotWishes.length > 0 ? `
+                    <div class="got-wish">
+                        ✨ 抽中：${exp.gotWishes.join(', ')}
+                    </div>
+                ` : ''}
+            </div>
+        `).join('');
+    }
+
+    // 核心計算功能
+    function calculate() {
+        if (!currentProbStats || currentProbStats.items === 0) {
+            alert('請先貼入機率表');
+            return;
+        }
+
+        const price = +document.getElementById('price').value;
+        const times = +document.getElementById('times').value;
+        
+        try {
+            const pulls = new Map();
+            const gradeStats = new Map();
+            const total = currentProbStats.total;
+
+            // 模擬抽卡
+            for (let i = 0; i < times; i++) {
+                let rand = Math.random() * total;
+                let sum = 0;
+                for (const item of items) {
+                    sum += item.probability;
+                    if (rand <= sum) {
+                        pulls.set(item.name, (pulls.get(item.name) || 0) + 1);
+                        gradeStats.set(item.grade, (gradeStats.get(item.grade) || 0) + 1);
+                        break;
+                    }
+                }
+            }
+
+            // 添加花費記錄
+            addExpense(price * times, times, pulls);
+
+            // 生成結果
+            const wishResults = Array.from(pulls.entries())
+                .filter(([name]) => wishItems.has(name));
+
+            let html = `
+                <div class="box">
+                    <h3>模擬結果</h3>
+                    <p>總機率：${total.toFixed(2)}%</p>
+                    <p>本次花費：NT$ ${(price * times).toLocaleString()}</p>
+                    <p>抽卡次數：${times} 次</p>
+                    ${wishResults.length > 0 ? `
+                        <div class="success-rate">
+                            本次抽中期望道具：<br>
+                            ${wishResults.map(([name, count]) => 
+                                `${name}: ${count}次 (${(count/times*100).toFixed(1)}%)`
+                            ).join('<br>')}
+                        </div>
+                    ` : ''}
+                    <h4>獎品統計</h4>
+                    <div class="grid">
+                        ${Array.from(pulls).map(([name, count]) => `
+                            <div class="card ${wishItems.has(name) ? 'highlight' : ''}">
+                                ${name}<br>
+                                ${count}次 (${(count/times*100).toFixed(1)}%)
+                            </div>
+                        `).join('')}
+                    </div>
+                    <h4>等級統計</h4>
+                    <div class="grid">
+                        ${Array.from(gradeStats).map(([grade, count]) => `
+                            <div class="card">
+                                ${grade}<br>
+                                ${count}次 (${(count/times*100).toFixed(1)}%)
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            document.getElementById('result').innerHTML = html;
+
+        } catch (error) {
+            document.getElementById('result').innerHTML = 
+                `<div class="box" style="border-left-color:red">錯誤：${error.message}</div>`;
+        }
+    }
+
+    // 工具函數
+    function removeExpense(index) {
+        if (confirm('確定要刪除這筆記錄嗎？')) {
+            totalSpent -= expenses[index].amount;
+            expenses.splice(index, 1);
+            updateExpenseDisplay();
+            saveData();
+        }
+    }
+
+    function updateCost() {
+        const price = +document.getElementById('price').value || 0;
+        const times = +document.getElementById('times').value || 0;
+        document.getElementById('cost').textContent = 
+            `本次花費：NT$ ${(price * times).toLocaleString()}`;
+    }
+
+    function saveData() {
+        localStorage.setItem('gachaData', JSON.stringify({
+            expenses,
+            wishItems: [...wishItems],
+            totalSpent
+        }));
+    }
+
+    function loadData() {
+        const saved = localStorage.getItem('gachaData');
+        if (saved) {
+            const data = JSON.parse(saved);
+            expenses = data.expenses;
+            wishItems = new Set(data.wishItems);
+            totalSpent = data.totalSpent;
+            updateExpenseDisplay();
+            updateWishlist();
+        }
+    }
+
+    function clearAll() {
+        if (confirm('是否清除所有記錄？')) {
+            expenses = [];
+            totalSpent = 0;
+            wishItems.clear();
+            currentProbStats = null;
+            localStorage.removeItem('gachaData');
+            document.getElementById('input').value = '';
+            document.getElementById('price').value = '30';
+            document.getElementById('times').value = '10';
+            document.getElementById('result').innerHTML = '';
+            document.getElementById('probStats').innerHTML = '<div>等待輸入機率表...</div>';
+            document.getElementById('warn').style.display = 'none';
+            updateExpenseDisplay();
+            updateWishlist();
+            updateCost();
+            items = [];
+        }
+    }
+
+    // 事件監聽
+    document.getElementById('price').addEventListener('input', updateCost);
+    document.getElementById('times').addEventListener('input', updateCost);
+    document.getElementById('wishInput').addEventListener('keypress', e => {
+        if (e.key === 'Enter') addWishItem();
+    });
+    document.getElementById('input').addEventListener('paste', () => {
+        setTimeout(() => {
+            analyzeProbability();
+            calculate();
+        }, 100);
+    });
+
+    // 初始化
+    window.addEventListener('load', () => {
+        loadData();
+        updateCost();
+    });
+</script>
+</body>
+</html>
