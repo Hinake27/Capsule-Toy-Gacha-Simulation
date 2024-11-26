@@ -2,6 +2,8 @@
 
 一個簡單但功能完整的扭蛋/轉蛋機率計算器，支援機率分析、模擬抽卡、花費統計等功能。
 
+https://hinake27.github.io/Capsule-Toy-Gacha-Simulation/
+
 ## 🌟 主要功能
 
 ### 1. 機率分析
